@@ -97,44 +97,182 @@ searchStudentsInput.addEventListener('input', (e) => {
 });
 
 // Action Handlers
+// Face recognition variables
+let faceMatcher = null;
+let labeledDescriptors = [];
+let modelsLoaded = false;
+let cameraStream = null;
+let recognitionInterval = null;
+
+// DOM Elements for camera
+const video = document.getElementById('video');
+const canvas = document.getElementById('overlay');
+const cameraContainer = document.getElementById('camera-container');
+const cameraLoading = document.getElementById('camera-loading');
+
+// Load Face API Models
+async function loadModels() {
+  if (modelsLoaded) return;
+  const MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/';
+  try {
+    await Promise.all([
+      faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL),
+      faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL),
+      faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL)
+    ]);
+    modelsLoaded = true;
+    console.log('Face-api models loaded');
+  } catch (err) {
+    console.error('Error loading face-api models:', err);
+    throw err;
+  }
+}
+
+// Generate descriptors for all registered students
+async function prepareFaceMatcher() {
+  setStatus(startStatus, 'Loading student face data...');
+  labeledDescriptors = [];
+
+  for (const student of allStudentsData) {
+    if (!student.photo_url) continue;
+    try {
+      const img = await faceapi.fetchImage(student.photo_url);
+      const detection = await faceapi.detectSingleFace(img).withFaceLandmarks().withFaceDescriptor();
+      if (detection) {
+        labeledDescriptors.push(new faceapi.LabeledFaceDescriptors(student.name, [detection.descriptor]));
+      }
+    } catch (err) {
+      console.warn(`Failed to process photo for ${student.name}:`, err);
+    }
+  }
+
+  if (labeledDescriptors.length > 0) {
+    faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6); // 0.6 threshold
+  }
+}
+
+// Action Handlers
 startBtn.addEventListener('click', async () => {
   startBtn.disabled = true;
-  setStatus(startStatus, 'Starting Python attendance script...');
+  cameraContainer.style.display = 'block';
+  cameraLoading.style.display = 'flex';
+  setStatus(startStatus, 'Initializing recognition system...');
+
   try {
-    const ipWebcamUrl = document.getElementById('ip-webcam-url').value.trim();
-    const res = await fetch(`${API_BASE_URL}/start`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(ipWebcamUrl ? { ip_webcam_url: ipWebcamUrl } : {})
-    });
-    const data = await res.json();
-    if (data.success) {
-      isSystemRunning = true;
-      updateStats();
+    await loadModels();
+
+    // Ensure we have current students data
+    if (allStudentsData.length === 0) await fetchStudents();
+    await prepareFaceMatcher();
+
+    if (!faceMatcher) {
+      throw new Error('No valid student face data found. Register students first.');
     }
-    setStatus(startStatus, data.message || 'System started.');
+
+    // Start Camera
+    cameraStream = await navigator.mediaDevices.getUserMedia({ video: {} });
+    video.srcObject = cameraStream;
+
+    cameraLoading.style.display = 'none';
+    isSystemRunning = true;
+    updateStats();
+    setStatus(startStatus, 'System running. Scanning faces...');
+
+    // Start recognition loop
+    startRecognitionLoop();
   } catch (err) {
-    setStatus(startStatus, 'Failed to start. Check configuration.', true);
+    console.error(err);
+    setStatus(startStatus, err.message || 'Error starting camera. Check permissions.', true);
+    cameraContainer.style.display = 'none';
   } finally {
     startBtn.disabled = false;
   }
 });
 
-stopBtn.addEventListener('click', async () => {
-  stopBtn.disabled = true;
+function startRecognitionLoop() {
+  const displaySize = { width: video.width, height: video.height };
+  faceapi.matchDimensions(canvas, displaySize);
+
+  recognitionInterval = setInterval(async () => {
+    if (!isSystemRunning) return;
+
+    const detections = await faceapi.detectAllFaces(video).withFaceLandmarks().withFaceDescriptors();
+    const resizedDetections = faceapi.resizeResults(detections, displaySize);
+
+    // Clear canvas
+    canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height);
+
+    resizedDetections.forEach(detection => {
+      const result = faceMatcher.findBestMatch(detection.descriptor);
+      const box = detection.detection.box;
+      const label = result.toString();
+
+      // Draw box and label
+      new faceapi.draw.DrawBox(box, { label }).draw(canvas);
+
+      // If recognized, send attendance
+      if (result.label !== 'unknown') {
+        recordAttendanceDebounced(result.label);
+      }
+    });
+  }, 500); // Check every 500ms
+}
+
+// Prevent multiple records for the same person in a short time
+const markedToday = new Set(); // Use a set to remember who was marked in this session
+function recordAttendanceDebounced(name) {
+  // If we already marked them in this browser session, don't even call the server
+  if (markedToday.has(name)) return;
+
+  const student = allStudentsData.find(s => s.name === name);
+  const roll_no = student ? student.roll_no : '';
+
+  submitAttendance(name, roll_no);
+}
+
+async function submitAttendance(name, roll_no) {
   try {
-    const res = await fetch(`${API_BASE_URL}/stop`, { method: 'POST' });
+    const payload = {
+      name,
+      roll_no,
+      source: 'Browser Camera',
+      recorded_at: new Date().toISOString()
+    };
+
+    const res = await fetch(`${API_BASE_URL}/attendance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
     const data = await res.json();
-    if (data.success) {
-      isSystemRunning = false;
+
+    if (res.ok) {
+      if (data.alreadyExists) {
+        console.log(`[Info] ${name} already marked for today.`);
+      } else {
+        console.log(`[Success] Attendance recorded for ${name}`);
+      }
+      // Add to our local "marked" list so we stop scanning them
+      markedToday.add(name);
       updateStats();
     }
-    setStatus(startStatus, data.message || 'System stopped.');
   } catch (err) {
-    setStatus(startStatus, 'Failed to stop.', true);
-  } finally {
-    stopBtn.disabled = false;
+    console.error('Failed to record attendance:', err);
   }
+}
+
+stopBtn.addEventListener('click', () => {
+  isSystemRunning = false;
+
+  if (recognitionInterval) clearInterval(recognitionInterval);
+  if (cameraStream) {
+    cameraStream.getTracks().forEach(track => track.stop());
+  }
+
+  cameraContainer.style.display = 'none';
+  updateStats();
+  setStatus(startStatus, 'System stopped.');
 });
 
 lookupForm.addEventListener('submit', async (e) => {

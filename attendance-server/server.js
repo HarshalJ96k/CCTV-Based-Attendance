@@ -146,10 +146,33 @@ app.post('/attendance', async (req, res) => {
     const { name, roll_no = '', recorded_at, source = 'web' } = req.body || {};
     if (!name) return res.status(400).json({ error: 'name is required' });
 
+    const now = recorded_at ? new Date(recorded_at) : new Date();
+    const startOfDay = new Date(now).setHours(0, 0, 0, 0);
+    const endOfDay = new Date(now).setHours(23, 59, 59, 999);
+
+    // Check if student already marked today
+    const { data: existing, error: checkError } = await supabase
+      .from('attendance')
+      .select('id')
+      .eq('name', name)
+      .gte('recorded_at', new Date(startOfDay).toISOString())
+      .lte('recorded_at', new Date(endOfDay).toISOString())
+      .limit(1);
+
+    if (checkError) throw checkError;
+
+    if (existing && existing.length > 0) {
+      return res.json({
+        success: true,
+        message: 'Attendance already recorded for today',
+        alreadyExists: true
+      });
+    }
+
     const payload = {
       name,
       roll_no,
-      recorded_at: recorded_at || new Date().toISOString(),
+      recorded_at: now.toISOString(),
       source,
     };
 
