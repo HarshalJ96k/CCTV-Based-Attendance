@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Attendance Pro | Smart Face Recognition</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+
+<body>
+  <header>
+    <h1>Attendance Pro</h1>
+    <p>Advanced Face Recognition Attendance System</p>
+  </header>
+
+  <div class="nav-container">
+    <nav>
+      <div class="nav-item active" data-tab="dashboard">
+        <i data-lucide="layout-dashboard"></i>
+        <span>Dashboard</span>
+      </div>
+      <div class="nav-item" data-tab="records">
+        <i data-lucide="clipboard-list"></i>
+        <span>Attendance Records</span>
+      </div>
+      <div class="nav-item" data-tab="students">
+        <i data-lucide="users"></i>
+        <span>Manage Students</span>
+      </div>
+    </nav>
+  </div>
+
+  <main>
+    <!-- Dashboard Tab -->
+    <section id="dashboard" class="tab-content active">
+      <div class="card">
+        <div class="card-header">
+          <h2>Teacher Control Panel</h2>
+          <p>Control the face recognition system and monitoring.</p>
+        </div>
+
+        <!-- Dashboard Stats -->
+        <div
+          style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+          <div style="background: #f1f5f9; padding: 1.5rem; border-radius: 12px; text-align: center;">
+            <div style="color: var(--text-muted); font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;">
+              Registered Students</div>
+            <div id="stat-total-students" style="font-size: 1.5rem; font-weight: 800; color: var(--primary);">0</div>
+          </div>
+          <div style="background: #f1f5f9; padding: 1.5rem; border-radius: 12px; text-align: center;">
+            <div style="color: var(--text-muted); font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;">Marked
+              Today</div>
+            <div id="stat-today-attendance" style="font-size: 1.5rem; font-weight: 800; color: #10b981;">0</div>
+          </div>
+          <div style="background: #f1f5f9; padding: 1.5rem; border-radius: 12px; text-align: center;">
+            <div style="color: var(--text-muted); font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;">System
+              Status</div>
+            <div id="stat-system-status" style="font-size: 1.125rem; font-weight: 700; color: #ef4444;">Offline</div>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="ip-webcam-url">Video Source (Optional IP Webcam)</label>
+          <input id="ip-webcam-url" type="text" placeholder="e.g., http://192.168.1.100:8080/video"
+            class="ip-webcam-input" />
+          <div class="hint-small">
+            Leave empty for local webcam. Enter IP Webcam URL for mobile camera integration.
+          </div>
+        </div>
+
+        <div class="button-group">
+          <button id="start-btn" class="primary-btn">
+            <i data-lucide="play"
+              style="display:inline-block; vertical-align:middle; width:18px; margin-right:8px;"></i>
+            Start System
+          </button>
+          <button id="stop-btn" class="secondary-btn">
+            <i data-lucide="square"
+              style="display:inline-block; vertical-align:middle; width:18px; margin-right:8px;"></i>
+            Stop System
+          </button>
+        </div>
+        <div id="start-status" class="status"></div>
+      </div>
+    </section>
+
+    <!-- Records Tab -->
+    <section id="records" class="tab-content">
+      <div class="card">
+        <div class="card-header">
+          <h2>Attendance Lookup</h2>
+          <p>Search and verify attendance records by student name.</p>
+        </div>
+
+        <form id="lookup-form">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+              <label for="lookup-student-name">Student Name (Optional)</label>
+              <input id="lookup-student-name" name="name" placeholder="Search by name...">
+            </div>
+            <div class="form-group">
+              <label for="lookup-date">Filter by Date</label>
+              <input id="lookup-date" type="date" name="date">
+            </div>
+          </div>
+          <div class="button-group">
+            <button type="submit" class="primary-btn">
+              <i data-lucide="search"
+                style="display:inline-block; vertical-align:middle; width:18px; margin-right:8px;"></i>
+              Filter Records
+            </button>
+            <button type="button" id="export-attendance-btn" class="secondary-btn"
+              style="background-color: #10b981; color: white;">
+              <i data-lucide="download"
+                style="display:inline-block; vertical-align:middle; width:18px; margin-right:8px;"></i>
+              Export CSV
+            </button>
+            <button type="button" id="clear-attendance-btn" class="secondary-btn"
+              style="background-color: #64748b; color: white;">
+              <i data-lucide="refresh-ccw"
+                style="display:inline-block; vertical-align:middle; width:18px; margin-right:8px;"></i>
+              Clear
+            </button>
+          </div>
+        </form>
+
+        <div id="lookup-status" class="status"></div>
+
+        <div class="table-wrapper">
+          <table id="attendance-table" class="hidden">
+            <thead>
+              <tr>
+                <th>Date & Time</th>
+                <th>Source</th>
+                <th>Name</th>
+                <th>Roll No</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- Students Tab -->
+    <section id="students" class="tab-content">
+      <div class="card">
+        <div class="card-header">
+          <h2>Registration</h2>
+          <p>Add new students to the recognition database.</p>
+        </div>
+
+        <form id="add-student-form" enctype="multipart/form-data">
+          <div class="form-group">
+            <label for="student-name">Full Name</label>
+            <input id="student-name" name="name" placeholder="John Doe" required>
+          </div>
+
+          <div class="form-group">
+            <label for="student-roll">Roll Number (Optional)</label>
+            <input id="student-roll" name="roll_no" placeholder="CS-2024-001">
+          </div>
+
+          <div class="form-group">
+            <label for="student-photo">Profile Photo (Face Recognition)</label>
+            <div style="display: flex; gap: 1rem; align-items: flex-start;">
+              <div style="flex: 1;">
+                <input id="student-photo" name="photo" type="file" accept="image/*" required>
+                <div class="hint-small">Upload a clear front-facing photo for best results.</div>
+              </div>
+              <div id="photo-preview-container"
+                style="width: 80px; height: 80px; border: 2px dashed var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #f8fafc;">
+                <i data-lucide="image" style="color: var(--border); width: 24px;"></i>
+              </div>
+            </div>
+          </div>
+
+          <button type="submit" class="primary-btn">Register Student</button>
+        </form>
+        <div id="add-student-status" class="status"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"
+          style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+          <div>
+            <h2>Registered Students</h2>
+            <p>List of students currently in the database.</p>
+          </div>
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <div class="form-group" style="margin-bottom: 0; position: relative;">
+              <input id="search-students" type="text" placeholder="Search students..."
+                style="padding: 0.5rem 0.75rem 0.5rem 2.25rem; font-size: 0.875rem; width: 200px; margin: 0;">
+              <i data-lucide="search"
+                style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); width: 14px; color: var(--text-muted);"></i>
+            </div>
+            <button id="export-students-btn" class="secondary-btn"
+              style="background-color: #10b981; color: white; padding: 0.5rem 1rem; white-space: nowrap;">
+              <i data-lucide="download"
+                style="display:inline-block; vertical-align:middle; width:16px; margin-right:4px;"></i>
+              Export List
+            </button>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table id="students-table">
+            <thead>
+              <tr>
+                <th>Photo</th>
+                <th>Name</th>
+                <th>Roll No</th>
+              </tr>
+            </thead>
+            <tbody id="students-list">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <p>&copy; 2024 Attendance Pro System. Built with Node.js, Python & Supabase.</p>
+  </footer>
+
+  <script src="app.js"></script>
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+  </script>
+</body>
+
+</html>
