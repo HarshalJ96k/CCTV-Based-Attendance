@@ -1,265 +1,251 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Attendance Pro | Smart Face Recognition</title>
   <link rel="stylesheet" href="style.css">
-  <!-- Lucide Icons -->
   <script src="https://unpkg.com/lucide@latest"></script>
-  <!-- Face-API.js for browser-based recognition -->
   <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
 </head>
-
 <body>
-  <header>
-    <h1>Attendance Pro</h1>
-    <p>Advanced Face Recognition Attendance System</p>
-  </header>
+  <div class="glow-bg"></div>
 
-  <div class="nav-container">
-    <nav>
-      <div class="nav-item active" data-tab="dashboard">
-        <i data-lucide="layout-dashboard"></i>
-        <span>Dashboard</span>
+  <!-- Main App Container -->
+  <div id="app" class="app-container">
+    
+    <!-- Login Screen -->
+    <section id="login-screen" class="screen active">
+      <div class="login-card glass">
+        <div class="login-header">
+          <i data-lucide="scan-face" class="logo-icon"></i>
+          <h1>Attendance Pro</h1>
+          <p>Sign in to continue to the portal</p>
+        </div>
+
+        <div class="role-selector">
+          <button class="role-btn active" data-role="student">Student</button>
+          <button class="role-btn" data-role="teacher">Teacher</button>
+        </div>
+
+        <form id="login-form">
+          <div class="form-group">
+            <label for="username" id="username-label">Enrollment Number</label>
+            <input type="text" id="username" placeholder="Enter ID" required>
+          </div>
+          <div class="form-group">
+            <label for="password">Password</label>
+            <input type="password" id="password" placeholder="Enter Password" required>
+          </div>
+          <button type="submit" class="btn primary-btn btn-block">Sign In</button>
+        </form>
+        <div id="login-status" class="status-msg"></div>
       </div>
-      <div class="nav-item" data-tab="records">
-        <i data-lucide="clipboard-list"></i>
-        <span>Attendance Records</span>
-      </div>
-      <div class="nav-item" data-tab="students">
-        <i data-lucide="users"></i>
-        <span>Manage Students</span>
-      </div>
-    </nav>
+    </section>
+
+    <!-- Teacher Screen -->
+    <section id="teacher-screen" class="screen hide">
+      <header class="app-header glass-header">
+        <div class="header-content">
+          <div class="header-title">
+            <i data-lucide="shield-check" class="logo-icon-small"></i>
+            <h2>Teacher Dashboard</h2>
+          </div>
+          <div class="header-actions">
+            <button class="btn icon-btn theme-toggle" title="Toggle Theme"><i data-lucide="sun"></i></button>
+            <button id="teacher-logout" class="btn icon-btn" title="Logout"><i data-lucide="log-out"></i> Logout</button>
+          </div>
+        </div>
+        <nav class="nav-tabs">
+          <div class="nav-item active" data-target="teacher-panel">Control Panel</div>
+          <div class="nav-item" data-target="teacher-records">Records</div>
+          <div class="nav-item" data-target="teacher-students">Students</div>
+        </nav>
+      </header>
+
+      <main class="main-content">
+        <!-- Control Panel -->
+        <div id="teacher-panel" class="tab-pane active fade-in">
+          <div class="card glass">
+            <h3>Attendance Session</h3>
+            <div class="stats-grid">
+              <div class="stat-box">
+                <span class="stat-label">System Status</span>
+                <span id="stat-sys-status" class="stat-val offline">Offline</span>
+              </div>
+              <div class="stat-box">
+                <span class="stat-label">Students Marked</span>
+                <span id="stat-marked" class="stat-val">0</span>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Subject</label>
+              <select id="session-subject">
+                <option value="">Select a Subject...</option>
+              </select>
+            </div>
+            <form id="add-subject-form" class="inline-form" style="margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px solid var(--border);">
+              <input type="text" id="new-subject-name" placeholder="Create new subject..." required>
+              <button type="submit" class="btn primary-btn btn-sm">Add Subject</button>
+            </form>
+            <div id="subject-status" class="status-msg" style="margin-top: -10px; margin-bottom: 15px;"></div>
+
+            <div class="form-group">
+              <label>Video Source (IP Webcam) - Optional</label>
+              <input type="text" id="ip-webcam-url" placeholder="http://192.168.x.x:8080/video">
+            </div>
+
+            <!-- Preview -->
+            <div id="teacher-camera" class="camera-wrapper hide">
+              <video id="teacher-video" autoplay muted playsinline></video>
+              <canvas id="teacher-overlay"></canvas>
+            </div>
+
+            <div class="btn-group">
+              <button id="start-sys-btn" class="btn success-btn"><i data-lucide="play"></i> Start Session</button>
+              <button id="stop-sys-btn" class="btn danger-btn hide"><i data-lucide="square"></i> Stop Session</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Records -->
+        <div id="teacher-records" class="tab-pane hide fade-in">
+          <div class="card glass">
+            <h3>Attendance Records</h3>
+            <form id="lookup-form" class="inline-form">
+              <input type="text" id="lookup-name" placeholder="Name">
+              <input type="date" id="lookup-date">
+              <button type="submit" class="btn primary-btn">Search</button>
+              <button type="button" id="export-records-btn" class="btn success-btn"><i data-lucide="download"></i></button>
+            </form>
+            <div class="table-responsive">
+              <table id="records-table">
+                <thead><tr><th>Time</th><th>Subject</th><th>Name</th><th>Roll No</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Students -->
+        <div id="teacher-students" class="tab-pane hide fade-in">
+          <div class="card glass">
+            <h3>Register Student</h3>
+            <form id="add-student-form">
+              <div class="form-row">
+                <div class="form-group f-1">
+                  <label>Full Name</label>
+                  <input type="text" name="name" required>
+                </div>
+                <div class="form-group f-1">
+                  <label>Roll Number</label>
+                  <input type="text" name="roll_no" required>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Profile Photo</label>
+                <div class="file-upload">
+                  <input type="file" name="photo" id="student-photo" accept="image/*" required>
+                  <div id="photo-preview" class="preview-box"><i data-lucide="image"></i></div>
+                </div>
+              </div>
+              <button type="submit" class="btn primary-btn">Register</button>
+            </form>
+            <div id="add-student-result" class="status-msg"></div>
+          </div>
+
+          <div class="card glass mt-4">
+            <div class="card-header-flex">
+              <h3>Registered Students</h3>
+              <button id="export-students-btn" class="btn small-btn success-btn"><i data-lucide="download"></i> Export</button>
+            </div>
+            <div class="table-responsive">
+              <table id="students-table">
+                <thead><tr><th>Photo</th><th>Name</th><th>Roll No</th><th>Password</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </main>
+    </section>
+
+    <!-- Student Screen -->
+    <section id="student-screen" class="screen hide">
+      <header class="app-header glass-header">
+        <div class="header-content">
+          <div class="header-title">
+            <i data-lucide="graduation-cap" class="logo-icon-small"></i>
+            <h2>Student Portal</h2>
+          </div>
+          <div class="header-actions">
+            <button class="btn icon-btn theme-toggle" title="Toggle Theme"><i data-lucide="sun"></i></button>
+            <button id="student-logout" class="btn icon-btn" title="Logout"><i data-lucide="log-out"></i> Logout</button>
+          </div>
+        </div>
+        <nav class="nav-tabs">
+          <div class="nav-item active" data-target="student-profile">Profile & Class</div>
+          <div class="nav-item" data-target="student-history">Past Attendance</div>
+        </nav>
+      </header>
+
+      <main class="main-content">
+        <!-- Profile / Mark Attendance -->
+        <div id="student-profile" class="tab-pane active fade-in">
+          <div class="student-dashboard">
+            <!-- Profile Card -->
+            <div class="card glass profile-card center-text">
+              <img id="my-profile-pic" src="" alt="Profile" class="profile-avatar">
+              <h3 id="my-name" class="profile-name"></h3>
+              <p id="my-roll-no" class="profile-roll"></p>
+            </div>
+            
+            <!-- Live Session Action -->
+            <div class="card glass flex-card">
+              <h3>Current Class Session</h3>
+              <div id="class-status-banner" class="status-banner offline">
+                <i data-lucide="info"></i> No active class session
+              </div>
+              
+              <div id="student-camera" class="camera-wrapper hide mt-4">
+                <div class="camera-overlay">Position your face clearly in view</div>
+                <video id="student-video" autoplay muted playsinline></video>
+              </div>
+
+              <button id="student-mark-btn" class="btn primary-btn btn-block mt-4 hide" disabled>
+                <i data-lucide="camera"></i> Mark My Attendance
+              </button>
+              <div id="student-mark-status" class="status-msg mt-2"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- History -->
+        <div id="student-history" class="tab-pane hide fade-in">
+          <div class="card glass">
+            <h3>Attendance Overview</h3>
+            <div class="stats-grid mt-4 mb-4">
+              <div class="stat-box">
+                <span class="stat-label">Total Days Presented</span>
+                <span id="my-total-att" class="stat-val highlight">0</span>
+              </div>
+            </div>
+            <div class="form-group inline-form">
+              <input type="text" id="my-subject-filter" placeholder="Filter by Subject...">
+            </div>
+            <div class="table-responsive">
+              <table id="my-attendance-table">
+                <thead><tr><th>Date & Time</th><th>Subject</th><th>Marked Via</th></tr></thead>
+                <tbody></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </main>
+    </section>
+
   </div>
-
-  <main>
-    <!-- Dashboard Tab -->
-    <section id="dashboard" class="tab-content active">
-      <div class="card">
-        <div class="card-header">
-          <h2>Teacher Control Panel</h2>
-          <p>Control the face recognition system and monitoring.</p>
-        </div>
-
-        <!-- Dashboard Stats -->
-        <div
-          style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
-          <div style="background: #f1f5f9; padding: 1.5rem; border-radius: 12px; text-align: center;">
-            <div style="color: var(--text-muted); font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;">
-              Registered Students</div>
-            <div id="stat-total-students" style="font-size: 1.5rem; font-weight: 800; color: var(--primary);">0</div>
-          </div>
-          <div style="background: #f1f5f9; padding: 1.5rem; border-radius: 12px; text-align: center;">
-            <div style="color: var(--text-muted); font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;">Marked
-              Today</div>
-            <div id="stat-today-attendance" style="font-size: 1.5rem; font-weight: 800; color: #10b981;">0</div>
-          </div>
-          <div style="background: #f1f5f9; padding: 1.5rem; border-radius: 12px; text-align: center;">
-            <div style="color: var(--text-muted); font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem;">System
-              Status</div>
-            <div id="stat-system-status" style="font-size: 1.125rem; font-weight: 700; color: #ef4444;">Offline</div>
-          </div>
-        </div>
-
-        <div class="form-group">
-          <label for="ip-webcam-url">Video Source (Optional IP Webcam)</label>
-          <input id="ip-webcam-url" type="text" placeholder="e.g., http://192.168.1.100:8080/video"
-            class="ip-webcam-input" />
-          <div class="hint-small">
-            Leave empty for local webcam. Enter IP Webcam URL for mobile camera integration.
-          </div>
-        </div>
-
-        <!-- Camera Feed Discovery -->
-        <div id="camera-container"
-          style="position: relative; width: 100%; max-width: 640px; margin: 1rem auto; display: none; border-radius: 12px; overflow: hidden; background: #000; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);">
-          <video id="video" width="640" height="480" autoplay muted playsinline
-            style="width: 100%; height: auto; display: block;"></video>
-          <canvas id="overlay" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%;"></canvas>
-          <div id="camera-loading"
-            style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.5); color: white; flex-direction: column; gap: 10px;">
-            <div
-              style="border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; width: 30px; height: 30px; animation: spin 2s linear infinite;">
-            </div>
-            <span>Loading AI Models...</span>
-          </div>
-        </div>
-        <style>
-          @keyframes spin {
-            0% {
-              transform: rotate(0deg);
-            }
-
-            100% {
-              transform: rotate(360deg);
-            }
-          }
-        </style>
-
-        <div class="button-group">
-          <button id="start-btn" class="primary-btn">
-            <i data-lucide="play"
-              style="display:inline-block; vertical-align:middle; width:18px; margin-right:8px;"></i>
-            Start System
-          </button>
-          <button id="stop-btn" class="secondary-btn">
-            <i data-lucide="square"
-              style="display:inline-block; vertical-align:middle; width:18px; margin-right:8px;"></i>
-            Stop System
-          </button>
-        </div>
-        <div id="start-status" class="status"></div>
-      </div>
-    </section>
-
-    <!-- Records Tab -->
-    <section id="records" class="tab-content">
-      <div class="card">
-        <div class="card-header">
-          <h2>Attendance Lookup</h2>
-          <p>Search and verify attendance records by student name.</p>
-        </div>
-
-        <form id="lookup-form">
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
-            <div class="form-group">
-              <label for="lookup-student-name">Student Name (Optional)</label>
-              <input id="lookup-student-name" name="name" placeholder="Search by name...">
-            </div>
-            <div class="form-group">
-              <label for="lookup-date">Filter by Date</label>
-              <input id="lookup-date" type="date" name="date">
-            </div>
-          </div>
-          <div class="button-group">
-            <button type="submit" class="primary-btn">
-              <i data-lucide="search"
-                style="display:inline-block; vertical-align:middle; width:18px; margin-right:8px;"></i>
-              Filter Records
-            </button>
-            <button type="button" id="export-attendance-btn" class="secondary-btn"
-              style="background-color: #10b981; color: white;">
-              <i data-lucide="download"
-                style="display:inline-block; vertical-align:middle; width:18px; margin-right:8px;"></i>
-              Export CSV
-            </button>
-            <button type="button" id="clear-attendance-btn" class="secondary-btn"
-              style="background-color: #64748b; color: white;">
-              <i data-lucide="refresh-ccw"
-                style="display:inline-block; vertical-align:middle; width:18px; margin-right:8px;"></i>
-              Clear
-            </button>
-          </div>
-        </form>
-
-        <div id="lookup-status" class="status"></div>
-
-        <div class="table-wrapper">
-          <table id="attendance-table" class="hidden">
-            <thead>
-              <tr>
-                <th>Date & Time</th>
-                <th>Source</th>
-                <th>Name</th>
-                <th>Roll No</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- Students Tab -->
-    <section id="students" class="tab-content">
-      <div class="card">
-        <div class="card-header">
-          <h2>Registration</h2>
-          <p>Add new students to the recognition database.</p>
-        </div>
-
-        <form id="add-student-form" enctype="multipart/form-data">
-          <div class="form-group">
-            <label for="student-name">Full Name</label>
-            <input id="student-name" name="name" placeholder="John Doe" required>
-          </div>
-
-          <div class="form-group">
-            <label for="student-roll">Roll Number (Optional)</label>
-            <input id="student-roll" name="roll_no" placeholder="CS-2024-001">
-          </div>
-
-          <div class="form-group">
-            <label for="student-photo">Profile Photo (Face Recognition)</label>
-            <div style="display: flex; gap: 1rem; align-items: flex-start;">
-              <div style="flex: 1;">
-                <input id="student-photo" name="photo" type="file" accept="image/*" required>
-                <div class="hint-small">Upload a clear front-facing photo for best results.</div>
-              </div>
-              <div id="photo-preview-container"
-                style="width: 80px; height: 80px; border: 2px dashed var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; overflow: hidden; background: #f8fafc;">
-                <i data-lucide="image" style="color: var(--border); width: 24px;"></i>
-              </div>
-            </div>
-          </div>
-
-          <button type="submit" class="primary-btn">Register Student</button>
-        </form>
-        <div id="add-student-status" class="status"></div>
-      </div>
-
-      <div class="card">
-        <div class="card-header"
-          style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-          <div>
-            <h2>Registered Students</h2>
-            <p>List of students currently in the database.</p>
-          </div>
-          <div style="display: flex; gap: 0.5rem; align-items: center;">
-            <div class="form-group" style="margin-bottom: 0; position: relative;">
-              <input id="search-students" type="text" placeholder="Search students..."
-                style="padding: 0.5rem 0.75rem 0.5rem 2.25rem; font-size: 0.875rem; width: 200px; margin: 0;">
-              <i data-lucide="search"
-                style="position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); width: 14px; color: var(--text-muted);"></i>
-            </div>
-            <button id="export-students-btn" class="secondary-btn"
-              style="background-color: #10b981; color: white; padding: 0.5rem 1rem; white-space: nowrap;">
-              <i data-lucide="download"
-                style="display:inline-block; vertical-align:middle; width:16px; margin-right:4px;"></i>
-              Export List
-            </button>
-          </div>
-        </div>
-        <div class="table-wrapper">
-          <table id="students-table">
-            <thead>
-              <tr>
-                <th>Photo</th>
-                <th>Name</th>
-                <th>Roll No</th>
-              </tr>
-            </thead>
-            <tbody id="students-list">
-              <!-- Dynamically populated -->
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-  </main>
-
-  <footer>
-    <p>&copy; 2024 Attendance Pro System. Built with Node.js, Python & Supabase.</p>
-  </footer>
-
   <script src="app.js"></script>
-  <script>
-    // Initialize Lucide icons
-    lucide.createIcons();
-  </script>
 </body>
-
 </html>

@@ -31,7 +31,8 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 
 let pythonChild = null;
 
-// Serve static frontend (plain HTML/JS) from ../web
+let currentSession = { active: false, subject: '' };
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -39,27 +40,72 @@ const staticDir = path.resolve(path.join(__dirname, '../web'));
 if (fs.existsSync(staticDir)) {
   app.use(express.static(staticDir));
   console.log(`[server] serving static frontend from ${staticDir}`);
-} else {
-  console.log('[server] skipping static serving (frontend hosted elsewhere)');
 }
 
 app.get('/health', (req, res) => {
   res.json({ ok: true, uptime: process.uptime() });
 });
 
+// Login Endpoint
+app.post('/login', async (req, res) => {
+  const { role, username, password } = req.body;
+
+  if (role === 'teacher') {
+    if (username === 'admin' && password === 'admin') {
+      res.json({ success: true, role: 'teacher' });
+    } else {
+      res.status(401).json({ error: 'Invalid teacher credentials' });
+    }
+  } else if (role === 'student') {
+    if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+    try {
+      const { data, error } = await supabase
+        .from('students')
+        .select('*')
+        .eq('roll_no', username)
+        .eq('password', password)
+        .single();
+      
+      if (error || !data) {
+        return res.status(401).json({ error: 'Invalid student credentials' });
+      }
+      res.json({ success: true, role: 'student', user: data });
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  } else {
+    res.status(400).json({ error: 'Invalid role' });
+  }
+});
+
+// Session Management
+app.get('/api/session', (req, res) => {
+  res.json(currentSession);
+});
+
+app.post('/api/session/start', (req, res) => {
+  const { subject } = req.body || {};
+  currentSession = { active: true, subject: subject || 'General' };
+  res.json({ success: true, session: currentSession });
+});
+
+app.post('/api/session/stop', (req, res) => {
+  currentSession = { active: false, subject: '' };
+  res.json({ success: true, session: currentSession });
+});
+
+// Attendance fetching
 app.get('/attendance', async (req, res) => {
   try {
     if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
-    const { name, date } = req.query;
+    const { name, date, roll_no, subject } = req.query;
 
     let query = supabase.from('attendance').select('*').order('recorded_at', { ascending: false });
 
-    if (name) {
-      query = query.ilike('name', `%${name}%`);
-    }
-
+    if (name) query = query.ilike('name', `%${name}%`);
+    if (roll_no) query = query.eq('roll_no', roll_no);
+    if (subject) query = query.ilike('subject', `%${subject}%`);
     if (date) {
-      // Use gte/lt to filter by a specific day (YYYY-MM-DD)
       const startDate = `${date}T00:00:00.000Z`;
       const endDate = `${date}T23:59:59.999Z`;
       query = query.gte('recorded_at', startDate).lte('recorded_at', endDate);
@@ -67,25 +113,60 @@ app.get('/attendance', async (req, res) => {
 
     const { data, error } = await query;
     if (error) throw error;
-
     res.json({ data });
   } catch (err) {
-    console.error('GET /attendance error:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
+// Students fetching
 app.get('/students', async (req, res) => {
   try {
     if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
     const { data, error } = await supabase
       .from('students')
-      .select('id,name,roll_no,photo_url')
+      .select('id,name,roll_no,photo_url,password')
       .order('name', { ascending: true });
     if (error) throw error;
     res.json({ data });
   } catch (err) {
-    console.error('GET /students error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Subjects endpoints
+app.get('/subjects', async (req, res) => {
+  try {
+    if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+    const { data, error } = await supabase
+      .from('subjects')
+      .select('name')
+      .order('name', { ascending: true });
+    if (error) throw error;
+    res.json({ data: data.map(s => s.name) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.post('/subjects', async (req, res) => {
+  try {
+    if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
+    const { name } = req.body || {};
+    if (!name) return res.status(400).json({ error: 'subject name is required' });
+
+    const { data, error } = await supabase
+      .from('subjects')
+      .insert([{ name }])
+      .select();
+      
+    if (error) {
+      if (error.code === '23505') return res.status(400).json({ error: 'Subject already exists' });
+      throw error;
+    }
+    
+    res.json({ success: true, data });
+  } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -97,10 +178,7 @@ async function ensureBucketExists() {
     const exists = buckets?.some((b) => b.name === STUDENT_BUCKET);
     if (exists) return;
     await supabase.storage.createBucket(STUDENT_BUCKET, { public: true });
-    console.log(`[storage] created bucket ${STUDENT_BUCKET}`);
-  } catch (err) {
-    console.warn('[storage] bucket check/create failed:', err.message);
-  }
+  } catch (err) {}
 }
 
 app.post('/students', upload.single('photo'), async (req, res) => {
@@ -125,16 +203,16 @@ app.post('/students', upload.single('photo'), async (req, res) => {
     const { data: publicUrlData } = supabase.storage.from(STUDENT_BUCKET).getPublicUrl(objectPath);
     const photo_url = publicUrlData?.publicUrl;
 
+    const password = Math.random().toString(36).slice(-8);
+
     const { data, error } = await supabase
       .from('students')
-      .insert([{ name, roll_no, photo_url }])
+      .insert([{ name, roll_no, photo_url, password }])
       .select();
+      
     if (error) throw error;
-
-    res.json({ success: true, data });
+    res.json({ success: true, data, password });
   } catch (err) {
-    console.error('POST /students full error:', JSON.stringify(err, null, 2));
-    console.error('POST /students error stack:', err.stack);
     res.status(500).json({ success: false, error: err.message, details: err });
   }
 });
@@ -143,14 +221,13 @@ app.post('/attendance', async (req, res) => {
   try {
     if (!supabase) return res.status(500).json({ error: 'Supabase not configured' });
 
-    const { name, roll_no = '', recorded_at, source = 'web' } = req.body || {};
+    const { name, roll_no = '', recorded_at, source = 'web', subject } = req.body || {};
     if (!name) return res.status(400).json({ error: 'name is required' });
 
     const now = recorded_at ? new Date(recorded_at) : new Date();
     const startOfDay = new Date(now).setHours(0, 0, 0, 0);
     const endOfDay = new Date(now).setHours(23, 59, 59, 999);
 
-    // Check if student already marked today
     const { data: existing, error: checkError } = await supabase
       .from('attendance')
       .select('id')
@@ -160,13 +237,8 @@ app.post('/attendance', async (req, res) => {
       .limit(1);
 
     if (checkError) throw checkError;
-
     if (existing && existing.length > 0) {
-      return res.json({
-        success: true,
-        message: 'Attendance already recorded for today',
-        alreadyExists: true
-      });
+      return res.json({ success: true, message: 'Attendance already recorded for today', alreadyExists: true });
     }
 
     const payload = {
@@ -174,9 +246,9 @@ app.post('/attendance', async (req, res) => {
       roll_no,
       recorded_at: now.toISOString(),
       source,
+      subject: subject || currentSession.subject || 'General'
     };
 
-    // try to link to students table by name (first match)
     try {
       const { data: studentRows, error: studentErr } = await supabase
         .from('students')
@@ -186,16 +258,12 @@ app.post('/attendance', async (req, res) => {
       if (!studentErr && studentRows && studentRows.length > 0) {
         payload.student_id = studentRows[0].id;
       }
-    } catch (innerErr) {
-      console.warn('[attendance] student lookup failed:', innerErr.message);
-    }
+    } catch (innerErr) {}
 
     const { data, error } = await supabase.from('attendance').insert([payload]).select();
     if (error) throw error;
-
     res.json({ success: true, data });
   } catch (err) {
-    console.error('POST /attendance error:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -209,12 +277,13 @@ app.post('/start', (req, res) => {
       return res.json({ success: true, message: 'Python attendance script already running' });
     }
 
-    // Get IP Webcam URL from request body
-    const { ip_webcam_url } = req.body || {};
+    const { ip_webcam_url, subject } = req.body || {};
     const env = { ...process.env };
     if (ip_webcam_url && ip_webcam_url.trim()) {
       env.IP_WEBCAM_URL = ip_webcam_url.trim();
-      console.log(`[INFO] Starting with IP Webcam URL: ${ip_webcam_url}`);
+    }
+    if (subject) {
+      env.CURRENT_SUBJECT = subject;
     }
 
     const child = spawn(pythonCmd, [scriptPath], {
@@ -227,17 +296,12 @@ app.post('/start', (req, res) => {
     pythonChild = child;
 
     child.on('close', (code) => {
-      console.log(`Python script exited with code ${code}`);
       pythonChild = null;
-    });
-    child.on('error', (err) => {
-      console.error('Failed to start Python script:', err);
     });
 
     const source = ip_webcam_url ? 'IP Webcam' : 'webcam';
     res.json({ success: true, message: `Python attendance script started with ${source}` });
   } catch (err) {
-    console.error('POST /start error:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
@@ -251,13 +315,11 @@ app.post('/stop', (req, res) => {
     pythonChild = null;
     res.json({ success: true, message: 'Python attendance script stopped' });
   } catch (err) {
-    console.error('POST /stop error:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 app.listen(PORT, () => {
   console.log(`[server] listening on http://localhost:${PORT}`);
-  console.log(`[server] static frontend at ${staticDir}`);
 });
 
