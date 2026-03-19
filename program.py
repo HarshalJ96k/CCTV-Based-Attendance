@@ -4,8 +4,8 @@ import numpy as np
 import csv
 import requests
 import os
+import math
 from datetime import datetime
-from pathlib import Path
 from io import BytesIO
 
 # API endpoint to receive attendance (defaults to local Express API)
@@ -17,7 +17,42 @@ IP_WEBCAM_URL = os.getenv("IP_WEBCAM_URL", "")
 # Current Subject
 CURRENT_SUBJECT = os.getenv("CURRENT_SUBJECT", "General")
 
-BASE_DIR = Path(__file__).resolve().parent
+# Target Geofencing Coordinates
+TARGET_LAT = 16.40614102801584
+TARGET_LON = 74.14202251348537
+MAX_DISTANCE_METERS = 100
+
+def haversine(lat1, lon1, lat2, lon2):
+    R = 6371000  # Radius of Earth in meters
+    phi_1 = math.radians(lat1)
+    phi_2 = math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+    a = math.sin(delta_phi/2.0)**2 + math.cos(phi_1)*math.cos(phi_2) * math.sin(delta_lambda/2.0)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+    return R * c
+
+def get_current_location():
+    # Note: For 100m accuracy, this requires a physical GPS module or mobile GPS sensors. 
+    # Standard IP-based location is highly inaccurate (cellular/ISP towers) and works mostly for demonstration.
+    try:
+        resp = requests.get("https://ipapi.co/json/", timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            return data.get("latitude"), data.get("longitude")
+    except Exception:
+        pass
+    return None, None
+
+current_lat, current_lon = get_current_location()
+if current_lat is not None and current_lon is not None:
+    distance = haversine(TARGET_LAT, TARGET_LON, current_lat, current_lon)
+    print(f"[INFO] Geofence check: Device is ~{distance:.2f} meters away.")
+    if distance > MAX_DISTANCE_METERS:
+        print(f"[ERROR] You are {distance:.2f}m from the campus. Attendance system is strictly disabled.")
+        exit(1)
+else:
+    print("[WARNING] Could not fetch location coordinates. Ensure you have network access.")
 
 print(f"[INFO] Sending attendance to: {SERVER_URL}")
 
@@ -70,13 +105,6 @@ else:
     print("[INFO] Using default webcam (device 0)")
     video_capture = cv2.VideoCapture(0)
 
-def load_encoding(image_path):
-    image = face_recognition.load_image_file(image_path)
-    encodings = face_recognition.face_encodings(image)
-    if len(encodings) == 0:
-        return None
-    return encodings[0]
-
 def load_encoding_from_url(url):
     try:
         resp = requests.get(url, timeout=8)
@@ -121,21 +149,7 @@ def build_known_faces():
                 name_to_roll[name] = roll
 
     if not known_encodings:
-        print("[INFO] No remote students found; using local photos fallback.")
-        local_photos = [
-            ("jobs", BASE_DIR / "photos" / "jobs.jpg"),
-            ("ratan tata", BASE_DIR / "photos" / "tata.jpg"),
-            ("sadmona", BASE_DIR / "photos" / "sadmona.jpg"),
-            ("tesla", BASE_DIR / "photos" / "tesla.jpg"),
-        ]
-        for name, path in local_photos:
-            if not path.exists():
-                continue
-            encoding = load_encoding(str(path))
-            if encoding is not None:
-                known_encodings.append(encoding)
-                known_names.append(name)
-                name_to_roll[name] = ""
+        print("[WARNING] No remote students found or failed to load photos from the API.")
 
     return known_encodings, known_names, name_to_roll
 
