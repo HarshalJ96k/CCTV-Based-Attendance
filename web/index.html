@@ -96,6 +96,17 @@
               <input type="text" id="ip-webcam-url" placeholder="http://192.168.x.x:8080/video">
             </div>
 
+            <div class="form-group" style="display: flex; align-items: center; justify-content: space-between; background: rgba(0,0,0,0.2); padding: 1rem; border-radius: 8px; border: 1px solid var(--border);">
+              <div>
+                <label style="margin-bottom: 0; font-size: 1rem; color: var(--text);">Location Boundary</label>
+                <span style="font-size: 0.75rem; color: var(--text-muted); display: block;">Restrict attendance to campus area</span>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="toggle-geofence-btn">
+                <span class="slider round"></span>
+              </label>
+            </div>
+
             <!-- Preview -->
             <div id="teacher-camera" class="camera-wrapper hide">
               <video id="teacher-video" autoplay muted playsinline></video>

@@ -228,6 +228,7 @@ function updateTeacherSessionUI() {
   const startBtn = document.getElementById('start-sys-btn');
   const stopBtn = document.getElementById('stop-sys-btn');
   const subjectInput = document.getElementById('session-subject');
+  const geofenceBtn = document.getElementById('toggle-geofence-btn');
   
   if (sessionActive) {
     statStatus.textContent = `Online (${sessionSubject})`;
@@ -235,13 +236,24 @@ function updateTeacherSessionUI() {
     startBtn.classList.add('hide');
     stopBtn.classList.remove('hide');
     subjectInput.disabled = true;
+    if (geofenceBtn) geofenceBtn.disabled = true;
   } else {
     statStatus.textContent = 'Offline';
     statStatus.className = 'stat-val offline';
     startBtn.classList.remove('hide');
     stopBtn.classList.add('hide');
     subjectInput.disabled = false;
+    if (geofenceBtn) geofenceBtn.disabled = false;
   }
+}
+
+// Geofence Toggle Logic
+let geofenceEnabled = false;
+const toggleGeofenceBtn = document.getElementById('toggle-geofence-btn');
+if(toggleGeofenceBtn) {
+  toggleGeofenceBtn.addEventListener('change', (e) => {
+    geofenceEnabled = e.target.checked;
+  });
 }
 
 // Start Session (CCTV & Session flag)
@@ -265,7 +277,7 @@ document.getElementById('start-sys-btn').addEventListener('click', async () => {
     await fetch(`${API_BASE_URL}/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ subject, ip_webcam_url: ipWebcam })
+      body: JSON.stringify({ subject, ip_webcam_url: ipWebcam, enable_geofence: geofenceEnabled })
     });
     
     sessionActive = true;

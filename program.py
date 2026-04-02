@@ -44,15 +44,20 @@ def get_current_location():
         pass
     return None, None
 
-current_lat, current_lon = get_current_location()
-if current_lat is not None and current_lon is not None:
-    distance = haversine(TARGET_LAT, TARGET_LON, current_lat, current_lon)
-    print(f"[INFO] Geofence check: Device is ~{distance:.2f} meters away.")
-    if distance > MAX_DISTANCE_METERS:
-        print(f"[ERROR] You are {distance:.2f}m from the campus. Attendance system is strictly disabled.")
-        exit(1)
+ENABLE_GEOFENCE = os.getenv("ENABLE_GEOFENCE", "false").lower() == "true"
+
+if ENABLE_GEOFENCE:
+    current_lat, current_lon = get_current_location()
+    if current_lat is not None and current_lon is not None:
+        distance = haversine(TARGET_LAT, TARGET_LON, current_lat, current_lon)
+        print(f"[INFO] Geofence check: Device is ~{distance:.2f} meters away.")
+        if distance > MAX_DISTANCE_METERS:
+            print(f"[ERROR] You are {distance:.2f}m from the campus. Attendance system is strictly disabled.")
+            exit(1)
+    else:
+        print("[WARNING] Could not fetch location coordinates. Ensure you have network access.")
 else:
-    print("[WARNING] Could not fetch location coordinates. Ensure you have network access.")
+    print("[INFO] Geofence check is disabled.")
 
 print(f"[INFO] Sending attendance to: {SERVER_URL}")
 

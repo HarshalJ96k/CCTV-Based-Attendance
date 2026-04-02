@@ -277,7 +277,7 @@ app.post('/start', (req, res) => {
       return res.json({ success: true, message: 'Python attendance script already running' });
     }
 
-    const { ip_webcam_url, subject } = req.body || {};
+    const { ip_webcam_url, subject, enable_geofence } = req.body || {};
     const env = { ...process.env };
     if (ip_webcam_url && ip_webcam_url.trim()) {
       env.IP_WEBCAM_URL = ip_webcam_url.trim();
@@ -285,6 +285,7 @@ app.post('/start', (req, res) => {
     if (subject) {
       env.CURRENT_SUBJECT = subject;
     }
+    env.ENABLE_GEOFENCE = enable_geofence ? "true" : "false";
 
     const child = spawn(pythonCmd, [scriptPath], {
       cwd: path.dirname(scriptPath),
