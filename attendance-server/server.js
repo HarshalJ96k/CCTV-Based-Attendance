@@ -291,6 +291,8 @@ app.post('/start', (req, res) => {
       env.CURRENT_SUBJECT = subject;
     }
     env.ENABLE_GEOFENCE = enable_geofence ? "true" : "false";
+    env.SERVER_URL = `http://localhost:${PORT}/attendance`;
+    env.STUDENTS_URL = `http://localhost:${PORT}/students`;
 
     const child = spawn(pythonCmd, [scriptPath], {
       cwd: path.dirname(scriptPath),

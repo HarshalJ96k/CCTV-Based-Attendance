@@ -107,10 +107,12 @@ if IP_WEBCAM_URL:
             print(f"[ERROR] Could not connect to IP Webcam.")
             video_capture = None
 else:
-    print("[INFO] Using default webcam (device 0)")
+    print("[INFO] Attempting to open default webcam...")
     video_capture = cv2.VideoCapture(0)
-    if video_capture.isOpened():
-        print("[SUCCESS] Default webcam initialized.")
+    if video_capture and video_capture.isOpened():
+        print("[SUCCESS] Default webcam connected.")
+    else:
+        print("[ERROR] Failed to open default webcam.")
 
 def load_encoding_from_url(url):
     try:
@@ -160,7 +162,10 @@ def build_known_faces():
 
     return known_encodings, known_names, name_to_roll
 
+print("[INFO] Loading student database encodings...")
 known_face_encodings, known_face_names, name_to_roll_no = build_known_faces()
+print(f"[SUCCESS] Loaded {len(known_face_names)} student encodings.")
+print("[INFO] Initializing system...")
 
 students = known_face_names.copy()
 now = datetime.now()
