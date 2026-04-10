@@ -1,1 +1,7 @@
 .vercel
+.verc.env
+node_modules/
+*.csv
+*.txt
+*.log
+.DS_Store
