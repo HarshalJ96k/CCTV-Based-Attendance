@@ -164,8 +164,7 @@ let allStudentsData = [];
 let allAttendanceData = [];
 
 async function initTeacher() {
-  await fetchSessionStatus(); // get initial status
-  updateTeacherSessionUI();
+  await fetchSessionStatus(); // get initial status (updates UI)
   loadSubjects();
   updateMarkedCount();
   
@@ -226,12 +225,12 @@ async function fetchSessionStatus() {
     const res = await fetch(`${API_BASE_URL}/api/session`);
     const data = await res.json();
     sessionActive = data.active;
-    sessionSubject = data.subject;
-    updateTeacherSessionUI();
+    sessionSubject = data.subject || '';
+    updateTeacherSessionUI(data);
   } catch(e) {}
 }
 
-function updateTeacherSessionUI() {
+function updateTeacherSessionUI(data = {}) {
   const statStatus = document.getElementById('stat-sys-status');
   const startBtn = document.getElementById('start-sys-btn');
   const stopBtn = document.getElementById('stop-sys-btn');
@@ -239,8 +238,19 @@ function updateTeacherSessionUI() {
   const geofenceBtn = document.getElementById('toggle-geofence-btn');
   
   if (sessionActive) {
-    statStatus.textContent = `Online (${sessionSubject})`;
-    statStatus.className = 'stat-val online';
+    let statusText = `Online (${sessionSubject})`;
+    let statusClass = 'stat-val online';
+    
+    if (data.cameraStatus) {
+      statusText += ` | Camera: ${data.cameraStatus}`;
+      if (data.cameraStatus === 'Failed' || data.cameraStatus === 'Error') {
+        statusClass = 'stat-val offline';
+        if (data.lastError) statusText += ` (${data.lastError})`;
+      }
+    }
+
+    statStatus.textContent = statusText;
+    statStatus.className = statusClass;
     startBtn.classList.add('hide');
     stopBtn.classList.remove('hide');
     subjectInput.disabled = true;

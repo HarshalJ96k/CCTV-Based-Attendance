@@ -109,6 +109,8 @@ if IP_WEBCAM_URL:
 else:
     print("[INFO] Using default webcam (device 0)")
     video_capture = cv2.VideoCapture(0)
+    if video_capture.isOpened():
+        print("[SUCCESS] Default webcam initialized.")
 
 def load_encoding_from_url(url):
     try:
@@ -247,7 +249,8 @@ while True:
         font = cv2.FONT_HERSHEY_DUPLEX
         cv2.putText(frame, name, (left + 6, bottom - 6), font, 0.8, (255, 255, 255), 1)
 
-    cv2.imshow("Attendance System", frame)
+    if not os.getenv("HEADLESS"):
+        cv2.imshow("Attendance System", frame)
 
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break

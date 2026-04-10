@@ -32,6 +32,8 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 *
 let pythonChild = null;
 
 let currentSession = { active: false, subject: '' };
+let cameraStatus = "Disconnected";
+let lastCameraError = "";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -80,7 +82,7 @@ app.post('/login', async (req, res) => {
 
 // Session Management
 app.get('/api/session', (req, res) => {
-  res.json(currentSession);
+  res.json({ ...currentSession, cameraStatus, lastError: lastCameraError });
 });
 
 app.post('/api/session/start', (req, res) => {
@@ -298,9 +300,33 @@ app.post('/start', (req, res) => {
     });
 
     pythonChild = child;
+    cameraStatus = "Connecting...";
+    lastCameraError = "";
+
+    // Capture stdout to detect connection success
+    child.stdout.on('data', (data) => {
+      const output = data.toString();
+      console.log(`[python] ${output}`);
+      if (output.includes('[SUCCESS]')) cameraStatus = "Connected";
+      if (output.includes('[ERROR]')) {
+        cameraStatus = "Failed";
+        lastCameraError = output.split('[ERROR]')[1].trim();
+      }
+    });
+
+    // Capture stderr for critical errors
+    child.stderr.on('data', (data) => {
+      const output = data.toString();
+      console.error(`[python-err] ${output}`);
+      if (output.toLowerCase().includes('error')) {
+        cameraStatus = "Error";
+        lastCameraError = output;
+      }
+    });
 
     child.on('close', (code) => {
       pythonChild = null;
+      cameraStatus = "Disconnected";
     });
 
     const source = ip_webcam_url ? 'IP Webcam' : 'webcam';
