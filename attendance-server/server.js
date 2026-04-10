@@ -228,10 +228,13 @@ app.post('/attendance', async (req, res) => {
     const startOfDay = new Date(now).setHours(0, 0, 0, 0);
     const endOfDay = new Date(now).setHours(23, 59, 59, 999);
 
+    const currentSub = subject || currentSession.subject || 'General';
+
     const { data: existing, error: checkError } = await supabase
       .from('attendance')
       .select('id')
       .eq('name', name)
+      .eq('subject', currentSub)
       .gte('recorded_at', new Date(startOfDay).toISOString())
       .lte('recorded_at', new Date(endOfDay).toISOString())
       .limit(1);
@@ -253,7 +256,7 @@ app.post('/attendance', async (req, res) => {
       const { data: studentRows, error: studentErr } = await supabase
         .from('students')
         .select('id')
-        .eq('name', name)
+        .eq('roll_no', roll_no)
         .limit(1);
       if (!studentErr && studentRows && studentRows.length > 0) {
         payload.student_id = studentRows[0].id;

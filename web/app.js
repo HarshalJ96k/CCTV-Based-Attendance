@@ -164,9 +164,17 @@ let allStudentsData = [];
 let allAttendanceData = [];
 
 async function initTeacher() {
+  await fetchSessionStatus(); // get initial status
   updateTeacherSessionUI();
-  fetchSessionStatus();
   loadSubjects();
+  updateMarkedCount();
+  
+  // Start polling session status and marked count for real-time updates
+  if(sessionPoller) clearInterval(sessionPoller);
+  sessionPoller = setInterval(async () => {
+    await fetchSessionStatus();
+    updateMarkedCount();
+  }, 5000);
 }
 
 async function loadSubjects() {
@@ -303,7 +311,14 @@ document.getElementById('stop-sys-btn').addEventListener('click', async () => {
 async function updateMarkedCount() {
   try {
     const today = new Date().toISOString().split('T')[0];
-    const res = await fetch(`${API_BASE_URL}/attendance?date=${today}`);
+    let url = `${API_BASE_URL}/attendance?date=${today}`;
+    
+    // Filter by subject if session is active to show "particular subject" count
+    if (sessionActive && sessionSubject) {
+      url += `&subject=${encodeURIComponent(sessionSubject)}`;
+    }
+    
+    const res = await fetch(url);
     const { data } = await res.json();
     document.getElementById('stat-marked').textContent = data ? data.length : 0;
   } catch(e){}
